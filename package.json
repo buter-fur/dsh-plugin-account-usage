@@ -1,0 +1,67 @@
+{
+  "name": "dsh-plugin-account-usage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DeepSeek Harness 编辑器底部用量条：账户余额、本任务花费（按模型与峰谷时段分别计费，含子代理）、当前计费时段",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-chat",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-session"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/holiday-calendar.js",
+    "data/",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "plugin",
+    "usage",
+    "cost",
+    "billing",
+    "balance"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/buter-fur/dsh-plugin-account-usage.git"
+  },
+  "homepage": "https://github.com/buter-fur/dsh-plugin-account-usage#readme",
+  "bugs": {
+    "url": "https://github.com/buter-fur/dsh-plugin-account-usage/issues"
+  }
+}

@@ -1,0 +1,9 @@
+# 依赖与缓存
+node_modules/
+holiday-cache/
+
+# 系统与编辑器
+.DS_Store
+*.log
+.idea/
+.vscode/

@@ -1,0 +1,8 @@
+# The dsh-plugin-account-usage bundle patch: one row in the Web profile.
+#
+# The package's browser half (`dsh.client` in package.json) is discovered by
+# the client module system on its own, so this bundle only has to mount the
+# Host-side placeholder that keeps the row addressable in the Loader.
+- insert:
+    - id: account-usage
+      name: dsh-plugin-account-usage
