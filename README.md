@@ -116,6 +116,7 @@ lib/client.js           浏览器半边：三个药丸与明细面板
 data/holiday-2026.json  内置日历兜底快照
 test/host-smoke.mjs     Host 半边自检（依赖面、注册契约、日历与峰谷判定）
 test/render-smoke.mjs   浏览器半边自检（装载 bundle 并渲染整行）
+test/panel-layout.mjs   真实浏览器布局回归（面板不许脱离药丸、不许出窗口）
 ```
 
 ## 版本兼容
@@ -124,8 +125,14 @@ test/render-smoke.mjs   浏览器半边自检（装载 bundle 并渲染整行）
 
 | 插件版本 | 需要的 DSH | 说明 |
 | --- | --- | --- |
+| 0.1.2 | ≥ 0.2.2 | 面板改成**自己量、自己摆**：位置由触发器实时矩形算出（底边固定离药丸上沿 8px，四周留 12px 边距，高度受药丸上方空间限制、超出就在面板内滚动）。不再用 CSS 锚点定位，因此不会有 `position-try` 在各回退间来回跳；药丸一旦显示过花费就锁定不再消失（任务中途重折投影导致的空快照只把数字换成「—」） |
 | 0.1.1 | ≥ 0.2.2 | 面板改用 CSS 锚点定位（`anchor-name` + `position-anchor`），不再依赖已删除的 `primitives.useAnchoredPosition`；`sessionProjections.register` 的异步句柄按 0.2.1-rc.2 的新契约处理；`x-client-version` 改为上报运行时真实版本 |
 | 0.1.0 | 0.2.0 ~ 0.2.1 | 面板定位走 `primitives.useAnchoredPosition`，0.2.2 起该导出被删除，渲染即抛错、三个药丸一起消失 |
+
+0.1.1 的两个已知缺陷（0.1.2 已修，记在这里因为它们是同一类问题）：
+
+- **面板会「飞走」**：0.1.1 照抄了官方统计弹窗的 `position-try` 回退组，其中「翻到触发器下方」「铺满整个视口」「顶到窗口上沿」三条是按「装得下吗」来选的。面板内容随任务推进一行行长起来（先是多模型，再是每个子代理一行），一旦越过阈值，浏览器就切换到别的回退：`bottom` 从「触发器上沿 + 8px」变成 `12px`，面板脱离药丸、盖住输入区或跳到窗口顶端。
+- **面板会「消失」**：同一次切换里若选中「翻到触发器下方」，面板跑到输入框底下、被窗口裁掉；另外花费药丸在空快照时会整个卸载，把它打开的面板一起带走。
 
 升级 DSH 后出现「插件用不了了」的排查顺序：
 
@@ -142,12 +149,14 @@ npm test
 两条自检，都只用 `node:` 内置模块，无需安装依赖：
 
 - **`test/host-smoke.mjs`**（Host 半边）——校验三个源文件只 import `node:` 与相对路径；按 0.2.2 语义调用 `apply`：`sessionProjections.register` 返回可调用的 thenable，注册成功只发生一次、注册被拒时不抛错也不留 unhandled rejection；`stateSchema.parse` / `wire.viewSchema.parse` 都能跑通；日历与峰谷判定与浏览器半边一致。
-- **`test/render-smoke.mjs`**（浏览器半边）——像页面那样通过 `window.__ModuleLoader__.load` 装载 `lib/client.js`，用一份与 0.2.2 导出表一致的 `dsh-client-ui-primitives` 桩、一个能真正执行函数组件的极简 React 桩来渲染整行：三颗药丸都出现、每颗的 `anchor-name` 唯一且是合法 dashed-ident、展开后每块面板用 `position-anchor` 指回自己的触发器、面板里没有任何 JavaScript 定位样式、并且 `apply` 注册的 dock 行能渲染、余额请求上报的是 `window.__DSH_BOOT__.release.version`。
+- **`test/render-smoke.mjs`**（浏览器半边）——像页面那样通过 `window.__ModuleLoader__.load` 装载 `lib/client.js`，用一份与 0.2.2 导出表一致的 `dsh-client-ui-primitives` 桩、一个能真正执行函数组件的极简 React 桩来渲染整行：三颗药丸都出现、面板把定位交给 `placePanel`（React 不写任何位置样式）、没有账单的会话不出现花费药丸、`apply` 注册的 dock 行能渲染、余额请求上报的是 `window.__DSH_BOOT__.release.version`。
+- **`test/panel-layout.mjs`**（真实浏览器里的布局回归）——在 headless Chrome 里打开一个「底部输入框 + 可滚动会话」的夹具，**直接注入 `lib/client.js` 里 `#region panel placement` 那段真实代码**和真实样式表，然后跑四种情形：内容刚好、内容超过一屏、内容远超一屏、以及输入框长高把药丸顶上去；再在窄窗口（500px）跑一遍。断言始终是同一条不变量：面板底边离药丸上沿 8px、永远在药丸上方、四边都不出窗口、超高时在面板内部滚动。没装 Chrome 时自动跳过（退出码 0）。
 
-两条硬约束（都已踩过坑）：
+本次布局 bug 的教训（也是第三条硬约束的来历）：**面板的位置不能交给「装得下吗」启发的回退机制**，因为面板内容会随任务变长，而回退只在阈值附近跳变——用户看到的就是「偶尔消失、偶尔飞上去」。要么量出来自己摆，要么只允许一个不变的方向。
 
 1. **Host 半边不许引用任何裸包名。** 插件装在 dsh 安装目录之外，Node 解析 import 是从引用文件自身目录往上找 `node_modules`，所以 `@deepseek-ai/*` 或任何 npm 包都会 `MODULE_NOT_FOUND`，后果是整个插件加载失败。只能用 `node:` 内置模块与插件内相对路径。`npm test` 里有这一条自动检查。
-2. **注册给投影注册表的 schema 必须带能跑通的 `parse`。** 注册表在构建会话快照时会对**每个**注册项调用 `stateSchema.parse` 与 `wire.viewSchema.parse`，一个坏掉的注册项会波及整个会话的历史读取。`apply` 里有 `isRegistrable` 闸门兜底：证明不了可解析就不注册。
+2. **面板位置只有一个方向。** 别再引入「翻到另一侧 / 铺满视口」这类回退：面板内容随任务增长，回退会在阈值处跳变。位置只能由 `placePanel` 计算，`test/panel-layout.mjs` 会拦住任何 CSS 锚点或 `position-try` 的回归。
+3. **注册给投影注册表的 schema 必须带能跑通的 `parse`。** 注册表在构建会话快照时会对**每个**注册项调用 `stateSchema.parse` 与 `wire.viewSchema.parse`，一个坏掉的注册项会波及整个会话的历史读取。`apply` 里有 `isRegistrable` 闸门兜底：证明不了可解析就不注册。
 
 ## License
 

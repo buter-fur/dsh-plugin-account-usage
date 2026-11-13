@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>account-usage panel layout</title>
+<style>
+  :root {
+    --dsh-frame-overlay-top: 0px;
+    --dsw-radius-lg: 12px;
+    --dsw-alias-border-l1: #ddd;
+    --dsw-alias-label-primary: #111;
+    --dsw-alias-label-secondary: #444;
+    --dsw-alias-label-tertiary: #777;
+    --dsw-alias-interactive-bg-hover: #eee;
+    --dsw-specific-menu: #fff;
+    --dsw-menu-backdrop-filter: blur(8px);
+    --dsw-elevation-prominent: 0 8px 32px rgba(0, 0, 0, 0.18);
+    --dsw-radius-sm: 8px;
+  }
+  html, body { margin: 0; height: 100%; }
+  body { display: flex; flex-direction: column; font: 13px/20px -apple-system, system-ui, sans-serif; }
+  #transcript { flex: 1 1 auto; overflow: auto; padding: 12px; }
+  #transcript p { margin: 0 0 10px; }
+  #composer { flex: none; padding: 12px; display: flex; justify-content: center; }
+  .dshAccountUsage_row { display: flex; gap: 12px; align-items: center; }
+  .dshAccountUsage_root { min-width: 0; display: inline-flex; }
+  .dshAccountUsage_trigger { min-width: 0; height: 28px; border-radius: 8px; color: #777; font-size: 12px; white-space: nowrap; cursor: pointer; background: 0 0; border: none; align-items: center; gap: 4px; padding: 6px 8px; display: inline-flex; }
+</style>
+<style id="plugin-css"></style>
+</head>
+<body>
+<div id="transcript"></div>
+<div id="composer">
+  <div class="dshAccountUsage_row" data-account-usage="true">
+    <span class="dshAccountUsage_root" id="pill">
+      <button type="button" class="dshAccountUsage_trigger" aria-haspopup="dialog" aria-expanded="false">本任务 ¥34.00</button>
+    </span>
+  </div>
+</div>
+<pre id="result">pending</pre>
+<script>
+window.__pluginCss = '__PLUGIN_CSS__';
+// Injected from the plugin's own `panel placement` region, so this fixture runs
+// the shipped algorithm rather than a copy of it.
+__PLACEMENT_SCRIPT__
+
+const box = (element) => {
+  const rect = element.getBoundingClientRect();
+  return {
+    top: Math.round(rect.top),
+    bottom: Math.round(rect.bottom),
+    left: Math.round(rect.left),
+    right: Math.round(rect.right),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+  };
+};
+
+window.fillTranscript = (paragraphs) => {
+  const host = document.getElementById('transcript');
+  host.innerHTML = '';
+  for (let index = 0; index < paragraphs; index += 1) {
+    const paragraph = document.createElement('p');
+    paragraph.textContent = `第 ${index + 1} 段任务内容：一段足够长的生成内容，用来把会话撑高。`;
+    host.appendChild(paragraph);
+  }
+  host.scrollTop = host.scrollHeight;
+};
+
+window.openPanel = () => {
+  const panel = document.createElement('div');
+  panel.className = 'dshAccountUsage_panel';
+  panel.setAttribute('role', 'dialog');
+  panel.innerHTML = [
+    '<div class="dshAccountUsage_title"><span class="dshAccountUsage_titleLabel">本任务花费（估算）</span><span class="dshAccountUsage_titleValue">¥34.00</span></div>',
+    '<div class="dshAccountUsage_rule"></div>',
+    '<dl class="dshAccountUsage_details"></dl>',
+  ].join('');
+  document.body.appendChild(panel);
+  document.querySelector('.dshAccountUsage_trigger').setAttribute('aria-expanded', 'true');
+  window.setPanelRows(5);
+};
+
+window.replace = () => window.__placePanel(document.getElementById('pill'), document.querySelector('.dshAccountUsage_panel'));
+
+window.setPanelRows = (rows) => {
+  const detail = document.querySelector('.dshAccountUsage_panel .dshAccountUsage_details');
+  detail.innerHTML = '';
+  for (let index = 0; index < rows; index += 1) {
+    const term = document.createElement('dt');
+    term.textContent = `子代理 ${index + 1} · deepseek-flash · 空闲时段 · ${index}00k tok`;
+    const value = document.createElement('dd');
+    value.textContent = `¥${(index * 0.37).toFixed(2)}`;
+    detail.append(term, value);
+  }
+  document.querySelector('.dshAccountUsage_panel').scrollTop = 0;
+};
+
+// Grow the composer the way a running task does: the trigger moves up, the
+// panel has to follow it instead of staying where it was.
+window.growComposer = () => {
+  const spacer = document.createElement('div');
+  spacer.style.height = '160px';
+  document.getElementById('composer').prepend(spacer);
+};
+
+window.measure = (label) => {
+  const panel = document.querySelector('.dshAccountUsage_panel');
+  const trigger = document.querySelector('.dshAccountUsage_trigger');
+  return {
+    label,
+    viewport: { width: innerWidth, height: innerHeight },
+    pill: box(trigger),
+    panel: panel === null ? null : box(panel),
+    scrollHeight: panel === null ? 0 : panel.scrollHeight,
+    clientHeight: panel === null ? 0 : panel.clientHeight,
+  };
+};
+
+window.runScenarios = () => {
+  const log = [];
+  const snap = (label) => { window.replace(); log.push(window.measure(label)); };
+  window.fillTranscript(30);
+  window.openPanel();
+  snap('content-fits');
+  window.setPanelRows(60);
+  snap('content-taller-than-window');
+  window.setPanelRows(600);
+  snap('content-much-taller-than-window');
+  window.setPanelRows(4);
+  window.growComposer();
+  snap('composer-grew');
+  document.getElementById('result').textContent = JSON.stringify(log);
+};
+
+window.addEventListener('load', () => {
+  document.getElementById('plugin-css').textContent = window.__pluginCss;
+  window.runScenarios();
+});
+</script>
+</body>
+</html>

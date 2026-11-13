@@ -2,6 +2,9 @@
 node_modules/
 holiday-cache/
 
+# 自检生成的夹具（正常写到 /tmp，保险起见也忽略）
+test/*.out-*.html
+
 # 系统与编辑器
 .DS_Store
 *.log

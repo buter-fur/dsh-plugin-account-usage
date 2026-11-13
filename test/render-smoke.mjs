@@ -31,6 +31,10 @@ const react = {
 		const cleanup = effect();
 		return typeof cleanup === 'function' ? cleanup : undefined;
 	},
+	useLayoutEffect(effect) {
+		const cleanup = effect();
+		return typeof cleanup === 'function' ? cleanup : undefined;
+	},
 	useMemo(factory) {
 		return factory();
 	},
@@ -77,6 +81,7 @@ const primitives = {
 const documentStub = {
 	body: { tag: 'body' },
 	head: { appendChild() {} },
+	documentElement: { clientWidth: 1280, clientHeight: 800 },
 	querySelector() {
 		return null;
 	},
@@ -101,6 +106,10 @@ globalThis.document = documentStub;
 
 let registration;
 globalThis.window = {
+	innerWidth: 1280,
+	innerHeight: 800,
+	addEventListener() {},
+	removeEventListener() {},
 	__DSH_BOOT__: { release: { version: '0.2.2-rc.2' } },
 	__ModuleLoader__: {
 		load(value) {
@@ -229,10 +238,7 @@ const closed = resolve(render());
 check('row renders without throwing', closed !== undefined && closed.type === 'div');
 const roots = find(closed, (node) => node.props?.className === 'dshAccountUsage_root');
 check('three pills render', roots.length === 3);
-const anchorNames = roots.map((node) => node.props.style?.anchorName);
-check('every pill carries an anchor name', anchorNames.every((name) => typeof name === 'string'));
-check('anchor names are distinct', new Set(anchorNames).size === anchorNames.length);
-check('anchor names are CSS dashed-idents', anchorNames.every((name) => /^--[A-Za-z0-9_-]+$/u.test(name)));
+check('pills carry no inline anchor styles', roots.every((node) => node.props.style === undefined));
 check('closed pills render no panel', find(closed, (node) => node.props?.className === 'dshAccountUsage_panel').length === 0);
 
 // Open every pill: the panel must be a portal that names the trigger's anchor.
@@ -241,17 +247,31 @@ stateSlots.length = 0;
 const opened = resolve(render());
 const panels = find(opened, (node) => node.props?.className === 'dshAccountUsage_panel');
 check('open pills render one panel each', panels.length === 3);
-const openAnchors = find(opened, (node) => node.props?.className === 'dshAccountUsage_root')
-	.map((node) => node.props.style?.anchorName);
-const panelAnchors = panels.map((node) => node.props.style?.positionAnchor);
-check('panel names its trigger anchor', panelAnchors.every((name) => openAnchors.includes(name))
-	&& new Set(panelAnchors).size === panelAnchors.length);
-check('panel uses no JavaScript position', panels.every((node) => {
+check('panel is positioned imperatively, not by React style', panels.every((node) => node.props.style === undefined));
+check('panel leaves positioning to the placement effect', panels.every((node) => {
 	const style = node.props.style ?? {};
 	return ['left', 'top', 'right', 'bottom', 'transform', 'visibility'].every((key) => !(key in style));
 }));
 check('panel is portalled to the body', find(opened, (node) => node.__portal === true).length === 3);
 check('panels show billed cost and window copy', JSON.stringify(opened).includes('dshAccountUsage_details'));
+
+// A fresh session with no billed step must not show a cost pill at all, while a
+// session that has billed keeps it even when a re-fold momentarily reports
+// nothing: the latch is what keeps an open panel from being unmounted.
+const emptyRows = find(resolve(exports.UsageStrip({
+	balance: balanceSource,
+	sessions,
+	sessionId: 'root-empty',
+	useProjection: () => undefined,
+	useSessions: (selector) => selector({ projectionsBySession: {} }),
+	t,
+})), (node) => node.props?.className === 'dshAccountUsage_trigger');
+const emptyLabels = emptyRows.map((node) => node.props?.children?.[1]?.props?.children);
+check('a session with no billed step shows no cost pill', emptyLabels.length === 2
+	&& !emptyLabels.some((label) => String(label).includes('本任务')));
+const pluginSource = readFileSync(new URL(`../${process.argv[2] ?? 'lib/client.js'}`, import.meta.url), 'utf8');
+check('the cost pill is latched against an empty snapshot', pluginSource.includes('everBilled.current === false) return null'));
+check('an empty snapshot still renders the pill', pluginSource.includes('pill.cost.none'));
 
 // #region activation
 const registered = [];
