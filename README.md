@@ -28,7 +28,7 @@ deepseek-flash · 1.0M tok · 高峰时段     ¥8.00
 
 ## 安装
 
-要求：DeepSeek Harness 桌面版（本插件按 `0.2.0-rc.2` 运行时开发）。插件已经预构建，**安装后不需要编译**。
+要求：DeepSeek Harness **0.2.2 及以上**（面板定位用的是 CSS 锚点定位；0.2.2 之前的版本没有这套能力，见「版本兼容」）。插件已经预构建，**安装后不需要编译**。
 
 ### 方式一：Web 界面（推荐）
 
@@ -114,40 +114,39 @@ lib/index.js            Host 半边：usageByModel 投影（按模型 × 时段�
 lib/holiday-calendar.js 节假日日历：读缓存/内置、联网刷新、内容指纹
 lib/client.js           浏览器半边：三个药丸与明细面板
 data/holiday-2026.json  内置日历兜底快照
+test/host-smoke.mjs     Host 半边自检（依赖面、注册契约、日历与峰谷判定）
+test/render-smoke.mjs   浏览器半边自检（装载 bundle 并渲染整行）
 ```
+
+## 版本兼容
+
+插件跟着 DSH 的客户端插件 API 走，升级 DSH 后如果药丸消失，先看这张表：
+
+| 插件版本 | 需要的 DSH | 说明 |
+| --- | --- | --- |
+| 0.1.1 | ≥ 0.2.2 | 面板改用 CSS 锚点定位（`anchor-name` + `position-anchor`），不再依赖已删除的 `primitives.useAnchoredPosition`；`sessionProjections.register` 的异步句柄按 0.2.1-rc.2 的新契约处理；`x-client-version` 改为上报运行时真实版本 |
+| 0.1.0 | 0.2.0 ~ 0.2.1 | 面板定位走 `primitives.useAnchoredPosition`，0.2.2 起该导出被删除，渲染即抛错、三个药丸一起消失 |
+
+升级 DSH 后出现「插件用不了了」的排查顺序：
+
+1. 侧边栏 **插件** 页确认 bundle 还在启用列表里（DSH 升级后若重建 profile，bundle 行可能被漏掉）。
+2. 看页面开发者工具 Console：如果是 `xxx is not a function`，是本插件引用了新版已删除的 API；如果是 404，是 `lib/client.js` 没随包发出去。
+3. 跑 `npm test`（见下），它用与新版本 `dsh-client-ui-primitives` 导出表一致的桩模块渲染整行，引用任何已删除的名字都会当场失败。
 
 ## 开发
 
-改完 Host 半边后，用下面两条自检（都在插件目录里跑）：
-
 ```bash
-# 1) 依赖面：只允许 node: 内置模块与插件内相对路径
-node -e "const fs=require('fs');
-for (const f of ['lib/index.js','lib/holiday-calendar.js','lib/client.js']) {
-  const s=fs.readFileSync(f,'utf8');
-  for (const m of s.matchAll(/^\s*import\s[^;]*?from\s+[\"']([^\"']+)[\"']/gm)) {
-    const spec=m[1];
-    if (!spec.startsWith('node:') && !spec.startsWith('./') && !spec.startsWith('../'))
-      throw new Error(f+': 禁止引用裸包名 -> '+spec);
-  }
-}
-console.log('依赖面 ok');"
-
-# 2) 按 Node 真实解析规则加载 Host 半边，并重放注册表会调用的调用路径
-node --input-type=module -e "
-const m = await import('./lib/index.js?'+Date.now());
-const d = m.usageByModelProjection;
-d.wire.viewSchema.parse(d.wire.view(d.stateSchema.parse(d.init())));
-if (!m.isRegistrable(d)) throw new Error('definition refused its own guard');
-const calls=[];
-m.apply({ sessionProjections:{ register:(x)=>calls.push(x) }, logger:{info(){},warn(){}}, effect:(f)=>{f();return ()=>{};}, get:()=>undefined });
-if (calls.length!==1) throw new Error('apply did not register the projection');
-console.log('Host 半边 ok | stateVersion='+d.stateVersion);"
+npm test
 ```
+
+两条自检，都只用 `node:` 内置模块，无需安装依赖：
+
+- **`test/host-smoke.mjs`**（Host 半边）——校验三个源文件只 import `node:` 与相对路径；按 0.2.2 语义调用 `apply`：`sessionProjections.register` 返回可调用的 thenable，注册成功只发生一次、注册被拒时不抛错也不留 unhandled rejection；`stateSchema.parse` / `wire.viewSchema.parse` 都能跑通；日历与峰谷判定与浏览器半边一致。
+- **`test/render-smoke.mjs`**（浏览器半边）——像页面那样通过 `window.__ModuleLoader__.load` 装载 `lib/client.js`，用一份与 0.2.2 导出表一致的 `dsh-client-ui-primitives` 桩、一个能真正执行函数组件的极简 React 桩来渲染整行：三颗药丸都出现、每颗的 `anchor-name` 唯一且是合法 dashed-ident、展开后每块面板用 `position-anchor` 指回自己的触发器、面板里没有任何 JavaScript 定位样式、并且 `apply` 注册的 dock 行能渲染、余额请求上报的是 `window.__DSH_BOOT__.release.version`。
 
 两条硬约束（都已踩过坑）：
 
-1. **Host 半边不许引用任何裸包名。** 插件装在 dsh 安装目录之外，Node 解析 import 是从引用文件自身目录往上找 `node_modules`，所以 `@deepseek-ai/*` 或任何 npm 包都会 `MODULE_NOT_FOUND`，后果是整个插件加载失败。只能用 `node:` 内置模块与插件内相对路径。
+1. **Host 半边不许引用任何裸包名。** 插件装在 dsh 安装目录之外，Node 解析 import 是从引用文件自身目录往上找 `node_modules`，所以 `@deepseek-ai/*` 或任何 npm 包都会 `MODULE_NOT_FOUND`，后果是整个插件加载失败。只能用 `node:` 内置模块与插件内相对路径。`npm test` 里有这一条自动检查。
 2. **注册给投影注册表的 schema 必须带能跑通的 `parse`。** 注册表在构建会话快照时会对**每个**注册项调用 `stateSchema.parse` 与 `wire.viewSchema.parse`，一个坏掉的注册项会波及整个会话的历史读取。`apply` 里有 `isRegistrable` 闸门兜底：证明不了可解析就不注册。
 
 ## License

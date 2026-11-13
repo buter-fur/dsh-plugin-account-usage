@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-account-usage",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "DeepSeek Harness 编辑器底部用量条：账户余额、本任务花费（按模型与峰谷时段分别计费，含子代理）、当前计费时段",
   "license": "MIT",
@@ -33,8 +33,11 @@
       "platform": "web"
     }
   },
+  "scripts": {
+    "test": "node test/host-smoke.mjs && node test/render-smoke.mjs lib/client.js"
+  },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.4"
+    "@deepseek-ai/cordis": ">=4.0.4 <5"
   },
   "files": [
     "lib/index.js",
